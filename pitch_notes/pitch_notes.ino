@@ -38,16 +38,11 @@ void setup() {
  pinMode(12, OUTPUT);
 }
 
-int current_note=0;
-int note_duration=0;
-int sequence[10];
-int seq_index=0;
-int pin13_state=LOW;
-int pin12_state=LOW;
 
-void loop() {
+void detect_note(float& note, float& volume)
+{
     cli();
-    long volume = 0;
+    volume=0;
     for (int i = 0 ; i < FHT_N ; i++) { // save 256 samples
       int k = 512-analogRead(A0);
       volume += abs(k);
@@ -62,8 +57,6 @@ void loop() {
     fht_mag_log(); // take the output of the fht
     uint8_t maxval=0;
     int maxi=0;
-    float noise_val=0;
-    int noise_acc=0;
     //for(int i=0;i<FHT_N/2;i++)
     for(int i=0;i<126;i++)
     {
@@ -72,11 +65,10 @@ void loop() {
         maxval=fht_log_out[i];
         maxi=i;
       }
-      noise_acc += fht_log_out[i];
     }
-    noise_val = noise_acc/126.0f;
     sei();
-    int note=maxi;
+    note=maxi;
+    
     // Evaluate a window around the detected note
     float notef = 0;
     int accum=0;
@@ -97,22 +89,31 @@ void loop() {
         accum += v;
       }
     }
-  
+    //note = notef/accum;
+}
+
+
+int current_note=0;
+int note_duration=0;
+int sequence[10];
+int seq_index=0;
+int pin13_state=LOW;
+int pin12_state=LOW;
+
+void loop() {
+
+    int note;
+    float notef;
+    float volume;
+    detect_note(notef, volume);
+    note = (int)(notef);
     //Serial.print("\n");
     
-    if(accum>0)
+    if((note>=10) &&(note<117))
     { Serial.print(" ");
-      Serial.print(notef/(float)(accum));
+      Serial.print(notef);
       Serial.print(" ");
-      Serial.print(note-win);
-      Serial.print(" ");
-      Serial.print(note+win);
-      Serial.print(" ");
-      Serial.print(maxval);
-      Serial.print(" ");
-      Serial.print(noise_val);
-      Serial.print(" ");
-      Serial.print(maxval/noise_val);
+      Serial.print(note);
       Serial.print(" ");
       Serial.print(volume);
       Serial.println(" ");
