@@ -1,0 +1,5 @@
+2017-01-11
+
+The FHT lib is working, using fht_adc_serial.ino and fht_viewer.py. But it does not have enough frequency resolution for what I am doing. It is coded in assembly and I don't really want to dive in it. I would need more frequency bins but I am not sure how to go above 256 samples it does not seem trivial.
+
+OK, there was actually a pretty straighforward solution: reduce the ADC speed. I need just a handful of samples per seconds and already had enough for the highest pitch notes. Put the prescaler from 16 to 64 and now I can discern between the lowest pitch notes.
