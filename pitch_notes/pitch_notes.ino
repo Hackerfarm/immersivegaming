@@ -38,18 +38,24 @@ void setup() {
  pinMode(12, OUTPUT);
 }
 
+int sound_buffer[FHT_N];
 
 void detect_note(float& note, float& volume)
 {
     cli();
     volume=0;
     for (int i = 0 ; i < FHT_N ; i++) { // save 256 samples
-      int k = 512-analogRead(A0);
+      sound_buffer[i] = analogRead(A0);
+    }
+
+    for (int i = 0 ; i < FHT_N ; i++) { // save 256 samples
+      int k = 512-sound_buffer[i];
       volume += abs(k);
       k -= 0x0200;
       k <<= 6;
       fht_input[i] = k ; // put real data into bins
     }
+    
     volume = volume/FHT_N;
     fht_window(); // window the data for better frequency response
     fht_reorder(); // reorder the data before doing the fht
@@ -69,7 +75,7 @@ void detect_note(float& note, float& volume)
     sei();
     note=maxi;
     
-    // Evaluate a window around the detected note
+    /*// Evaluate a window around the detected note
     float notef = 0;
     int accum=0;
     int win = 10;
@@ -89,7 +95,7 @@ void detect_note(float& note, float& volume)
         accum += v;
       }
     }
-    //note = notef/accum;
+    note = notef/accum;*/
 }
 
 
@@ -142,10 +148,10 @@ void loop() {
     {
       sequence[seq_index]=current_note;
       seq_index=(seq_index+1)%10;
-      if((abs(sequence[(10+seq_index-4)%10]-24)<=1) &&
-         (abs(sequence[(10+seq_index-3)%10]-27)<=1) &&
-         (abs(sequence[(10+seq_index-2)%10]-30)<=1) &&
-         (abs(sequence[(10+seq_index-1)%10]-24)<=1))
+      if((abs(sequence[(10+seq_index-4)%10]-23)<=1) &&
+         (abs(sequence[(10+seq_index-3)%10]-25)<=1) &&
+         (abs(sequence[(10+seq_index-2)%10]-28)<=1) &&
+         (abs(sequence[(10+seq_index-1)%10]-23)<=1))
          {
            Serial.println("SPELL!");
            if(pin13_state==LOW)
@@ -154,10 +160,10 @@ void loop() {
              pin13_state=LOW;
            digitalWrite(13, pin13_state);
          }
-      if((abs(sequence[(10+seq_index-4)%10]-20)<=1) &&
-         (abs(sequence[(10+seq_index-3)%10]-18)<=1) &&
-         (abs(sequence[(10+seq_index-2)%10]-20)<=1) &&
-         (abs(sequence[(10+seq_index-1)%10]-18)<=1))
+      if((abs(sequence[(10+seq_index-4)%10]-19)<=1) &&
+         (abs(sequence[(10+seq_index-3)%10]-17)<=1) &&
+         (abs(sequence[(10+seq_index-2)%10]-19)<=1) &&
+         (abs(sequence[(10+seq_index-1)%10]-17)<=1))
          {
            Serial.println("SPELL!");
            if(pin12_state==LOW)
