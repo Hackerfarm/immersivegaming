@@ -23,11 +23,78 @@ port at 115.2kb.
 
 #include <FHT.h> // include the library
 
+const int NUM_SPELLS = 2;
+int *spell_length;
+int **spell_sequence;
+char **spell_name;
 
+int note_letter_to_int(char note)
+{
+  switch(note)
+  {
+    case 'F':
+    return 17;
+    break;
+    
+    case 'G':
+    return 19;
+    break;
+    
+    case 'A':
+    break;
+    case 'B':
+    break;
+    
+    case 'C':
+    return 23;
+    break;
+    
+    case 'D':
+    return 25;
+    break;
+    
+    case 'E':
+    return 28;
+    break;
+  }
+}
+
+void make_spell(int index, char* spellname, char* notes)
+{
+  delete spell_sequence[index];
+  delete spell_name[index];
+  spell_length[index] = strlen(notes);
+  spell_name[index] = new char[strlen(spellname)+1];
+  strcpy(spell_name[index], spellname);
+  spell_sequence[index] = new int[strlen(notes)];
+  for(int i=0;i<strlen(notes);i++)
+    spell_sequence[index][i] = note_letter_to_int(notes[i]);
+}
+
+int recog_spell(int* sequence, int buffer_length, int current_ind)
+{
+  for(int i=0;i<NUM_SPELLS;i++)
+  {
+    bool fail = false;
+    for(int j=0;j<spell_length[i];j++)
+    {
+      int note = sequence[(buffer_length+current_ind-spell_length[i]+j+1)%buffer_length];
+      int spell_note = spell_sequence[i][j];
+      if(abs(note-spell_note)>1)
+      {
+        fail=true;
+        break;
+      }
+    }
+    if(!fail)
+      return i;
+  }
+  return -1;
+}
 
 void setup() {
   Serial.begin(115200); // use the serial port
-
+  Serial.println("starting");
  // ADC configuration
  // set prescale to 16
  sbi(ADCSRA,ADPS2) ;
@@ -36,6 +103,24 @@ void setup() {
 
  pinMode(13, OUTPUT);
  pinMode(12, OUTPUT);
+ 
+
+
+ // Spells initialization
+
+ spell_length = new int[NUM_SPELLS];
+ spell_sequence = new int*[NUM_SPELLS];
+ spell_name = new char*[NUM_SPELLS];
+ for(int i=0;i<NUM_SPELLS;i++)
+ {
+  spell_length[i]=0;
+  spell_sequence[i] = NULL;
+  spell_name[i] = NULL;
+ }
+
+ make_spell(0, "Red Led", "CDEC");
+ make_spell(1, "Green Led", "FGFG");
+ Serial.println("setup done");
 }
 
 int sound_buffer[FHT_N];
@@ -101,13 +186,12 @@ void detect_note(float& note, float& volume)
 
 int current_note=0;
 int note_duration=0;
-int sequence[10];
+int cur_sequence[10];
 int seq_index=0;
 int pin13_state=LOW;
 int pin12_state=LOW;
 
 void loop() {
-
     int note;
     float notef;
     float volume;
@@ -116,7 +200,8 @@ void loop() {
     //Serial.print("\n");
     
     if((note>=10) &&(note<117))
-    { Serial.print(" ");
+    { 
+      Serial.print(" ");
       Serial.print(notef);
       Serial.print(" ");
       Serial.print(note);
@@ -146,12 +231,11 @@ void loop() {
 
     if(note_duration==4)
     {
-      sequence[seq_index]=current_note;
-      seq_index=(seq_index+1)%10;
-      if((abs(sequence[(10+seq_index-4)%10]-23)<=1) &&
-         (abs(sequence[(10+seq_index-3)%10]-25)<=1) &&
-         (abs(sequence[(10+seq_index-2)%10]-28)<=1) &&
-         (abs(sequence[(10+seq_index-1)%10]-23)<=1))
+      cur_sequence[seq_index]=current_note;
+      /*if((abs(cur_sequence[(10+seq_index-4)%10]-23)<=1) &&
+         (abs(cur_sequence[(10+seq_index-3)%10]-25)<=1) &&
+         (abs(cur_sequence[(10+seq_index-2)%10]-28)<=1) &&
+         (abs(cur_sequence[(10+seq_index-1)%10]-23)<=1))
          {
            Serial.println("SPELL!");
            if(pin13_state==LOW)
@@ -160,10 +244,10 @@ void loop() {
              pin13_state=LOW;
            digitalWrite(13, pin13_state);
          }
-      if((abs(sequence[(10+seq_index-4)%10]-19)<=1) &&
-         (abs(sequence[(10+seq_index-3)%10]-17)<=1) &&
-         (abs(sequence[(10+seq_index-2)%10]-19)<=1) &&
-         (abs(sequence[(10+seq_index-1)%10]-17)<=1))
+      if((abs(cur_sequence[(10+seq_index-4)%10]-19)<=1) &&
+         (abs(cur_sequence[(10+seq_index-3)%10]-17)<=1) &&
+         (abs(cur_sequence[(10+seq_index-2)%10]-19)<=1) &&
+         (abs(cur_sequence[(10+seq_index-1)%10]-17)<=1))
          {
            Serial.println("SPELL!");
            if(pin12_state==LOW)
@@ -171,16 +255,39 @@ void loop() {
            else
              pin12_state=LOW;
            digitalWrite(12, pin12_state);
-         }
+         }*/
         for(int j=0;j<10;j++)
         {
-          Serial.print(sequence[j]);
-          if(j==(10+seq_index-1)%10)
+          Serial.print(cur_sequence[j]);
+          if(j==(10+seq_index)%10)
             Serial.print("< ");
           else
             Serial.print("  ");
         }
         Serial.println("");
+        int spell = recog_spell(cur_sequence, 10, seq_index);
+        if(spell!=-1){
+          Serial.println("SPELL!");
+          Serial.println(spell_name[spell]);
+
+          if(spell==0)
+          {
+            if(pin13_state==LOW)
+             pin13_state=HIGH;
+           else
+             pin13_state=LOW;
+           digitalWrite(13, pin13_state);
+          }
+          if(spell==1)
+          {
+            if(pin12_state==LOW)
+             pin12_state=HIGH;
+           else
+             pin12_state=LOW;
+           digitalWrite(12, pin12_state);
+          }
+        }
+        seq_index=(seq_index+1)%10;
     }
     
      //Serial.print(current_note);
