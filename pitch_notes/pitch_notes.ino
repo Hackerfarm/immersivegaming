@@ -22,11 +22,37 @@ port at 115.2kb.
 #define SCALE 32
 
 #include <FHT.h> // include the library
+#include <chibi.h>
+#include <Wire.h>
+#include <stdint.h>
 
-const int NUM_SPELLS = 2;
-int *spell_length;
-int **spell_sequence;
-char **spell_name;
+//// globals radio
+//
+  int hgmPin = 22;
+  int ledPin = 18;
+  int vbatPin = 31;
+  int vsolPin = 29;
+  int led_state = 1;
+  
+  #define ADCREFVOLTAGE 3.3
+  #define NODE_ID 300
+//
+
+//// globals spells
+//
+  const int NUM_SPELLS = 2;
+  int *spell_length;
+  int **spell_sequence;
+  char **spell_name;
+  int sound_buffer[FHT_N];
+  int current_note=0;
+  int note_duration=0;
+  int cur_sequence[10];
+  int seq_index=0;
+  int pin13_state=LOW;
+  int pin12_state=LOW;
+//
+
 
 int note_letter_to_int(char note)
 {
@@ -95,6 +121,7 @@ int recog_spell(int* sequence, int buffer_length, int current_ind)
 void setup() {
   Serial.begin(115200); // use the serial port
   Serial.println("starting");
+  
  // ADC configuration
  // set prescale to 16
  sbi(ADCSRA,ADPS2) ;
@@ -106,8 +133,7 @@ void setup() {
  
 
 
- // Spells initialization
-
+ //// Spells initialization
  spell_length = new int[NUM_SPELLS];
  spell_sequence = new int*[NUM_SPELLS];
  spell_name = new char*[NUM_SPELLS];
@@ -120,10 +146,26 @@ void setup() {
 
  make_spell(0, "Red Led", "CDEC");
  make_spell(1, "Green Led", "FGFG");
+
+
+  //// Initialize radio
+  // set up high gain mode pin
+  pinMode(hgmPin, OUTPUT);
+  digitalWrite(hgmPin, LOW);
+  // set up battery monitoring
+  pinMode(vbatPin, INPUT);
+  // set up LED
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
+  // Initialize the chibi command line and set the speed to 57600 bps
+  chibiCmdInit(115200);
+  // Initialize the chibi wireless stack
+  chibiInit();
+  // high gain mode
+  digitalWrite(hgmPin, HIGH);
+ 
  Serial.println("setup done");
 }
-
-int sound_buffer[FHT_N];
 
 void detect_note(float& note, float& volume)
 {
@@ -184,12 +226,6 @@ void detect_note(float& note, float& volume)
 }
 
 
-int current_note=0;
-int note_duration=0;
-int cur_sequence[10];
-int seq_index=0;
-int pin13_state=LOW;
-int pin12_state=LOW;
 
 void loop() {
     int note;
@@ -277,6 +313,11 @@ void loop() {
            else
              pin13_state=LOW;
            digitalWrite(13, pin13_state);
+           char sbuf[100];
+           sprintf(sbuf, "SPELL:%s", spell_name[spell]);
+           Serial.println(sbuf);
+           chibiTx(BROADCAST_ADDR, (unsigned char*)(&sbuf), strlen(sbuf)+1);
+           free(sbuf);           
           }
           if(spell==1)
           {
