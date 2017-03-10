@@ -34,8 +34,9 @@ port at 115.2kb.
   int vsolPin = 29;
   int led_state = 1;
   
-  #define ADCREFVOLTAGE 3.3
   #define NODE_ID 300
+  #define RX_BUFSIZE 1000
+  unsigned char radio_buf[RX_BUFSIZE];
 //
 
 //// globals spells
@@ -152,11 +153,6 @@ void setup() {
   // set up high gain mode pin
   pinMode(hgmPin, OUTPUT);
   digitalWrite(hgmPin, LOW);
-  // set up battery monitoring
-  pinMode(vbatPin, INPUT);
-  // set up LED
-  pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, LOW);
   // Initialize the chibi command line and set the speed to 57600 bps
   chibiCmdInit(115200);
   // Initialize the chibi wireless stack
@@ -225,7 +221,7 @@ void detect_note(float& note, float& volume)
     note = notef/accum;*/
 }
 
-
+char sbuf[100];
 
 void loop() {
     int note;
@@ -235,7 +231,7 @@ void loop() {
     note = (int)(notef);
     //Serial.print("\n");
     
-    if((note>=10) &&(note<117))
+    /*if((note>=10) &&(note<117))
     { 
       Serial.print(" ");
       Serial.print(notef);
@@ -244,7 +240,7 @@ void loop() {
       Serial.print(" ");
       Serial.print(volume);
       Serial.println(" ");
-    }
+    }*/
     if(note<10)
     {
       // then it is not a note
@@ -267,6 +263,11 @@ void loop() {
 
     if(note_duration==4)
     {
+    sprintf(sbuf, "note=%d volume=%d", note, (int)volume);
+    Serial.println(sbuf);
+    chibiTx(BROADCAST_ADDR, (unsigned char*)(&sbuf), strlen(sbuf)+1);
+
+      
       cur_sequence[seq_index]=current_note;
       /*if((abs(cur_sequence[(10+seq_index-4)%10]-23)<=1) &&
          (abs(cur_sequence[(10+seq_index-3)%10]-25)<=1) &&
@@ -313,11 +314,6 @@ void loop() {
            else
              pin13_state=LOW;
            digitalWrite(13, pin13_state);
-           char sbuf[100];
-           sprintf(sbuf, "SPELL:%s", spell_name[spell]);
-           Serial.println(sbuf);
-           chibiTx(BROADCAST_ADDR, (unsigned char*)(&sbuf), strlen(sbuf)+1);
-           free(sbuf);           
           }
           if(spell==1)
           {
@@ -330,8 +326,26 @@ void loop() {
         }
         seq_index=(seq_index+1)%10;
     }
-    
-     //Serial.print(current_note);
-     //Serial.print("\t");
-     //Serial.println(note_duration);
+
+    // Radio receive
+    if (chibiDataRcvd() == true)
+    { 
+      int rssi, src_addr, len;
+      len = chibiGetData(radio_buf);
+      if (len == 0) {
+        Serial.println("Null packet received");
+        return;
+      }
+      
+      // retrieve the data and the signal strength
+      rssi = chibiGetRSSI();
+      src_addr = chibiGetSrcAddr();
+      Serial.print("Signal strength: ");
+      Serial.print(rssi);
+      Serial.print("\t");
+      if (len)
+      {
+        Serial.println((char*)(radio_buf));
+      }
+    }
 }
