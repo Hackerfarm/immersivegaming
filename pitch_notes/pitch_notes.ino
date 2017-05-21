@@ -26,6 +26,13 @@ port at 115.2kb.
 #include <Wire.h>
 #include <stdint.h>
 
+#include <Adafruit_NeoPixel.h>
+#define LED_PIN            6
+#define MAX_LED_VALUE      64
+#define NUM_LEDS           8
+
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(8, LED_PIN, NEO_GRB + NEO_KHZ800);
+
 //// globals radio
 //
   int hgmPin = 22;
@@ -49,11 +56,17 @@ port at 115.2kb.
   int current_note=0;
   int note_duration=0;
   int cur_sequence[10];
+  int volume_total=0;
   int seq_index=0;
   int pin13_state=LOW;
   int pin12_state=LOW;
 //
 
+//// globals game
+//
+  int player_hp=6;
+  int player_max_hp=8;
+//
 
 int note_letter_to_int(char note)
 {
@@ -119,7 +132,29 @@ int recog_spell(int* sequence, int buffer_length, int current_ind)
   return -1;
 }
 
+void show_hp(int hp, int maxhp=NUM_LEDS)
+{
+  uint32_t green = pixels.Color(0,MAX_LED_VALUE,0);
+  uint32_t red   = pixels.Color(MAX_LED_VALUE,0,0);
+  uint32_t off   = pixels.Color(0,0,0);
+  
+  for(int i=0;i<hp;i++)
+  {
+    pixels.setPixelColor(i, green);
+  }
+  for(int i=hp;i<maxhp;i++)
+  {
+    pixels.setPixelColor(i, red);
+  }
+  for(int i=maxhp;i<NUM_LEDS;i++)
+  {
+    pixels.setPixelColor(i, off);
+  }
+  pixels.show();
+}
+
 void setup() {
+  pixels.begin(); // NeoPixel init
   Serial.begin(115200); // use the serial port
   Serial.println("starting");
   
@@ -229,18 +264,7 @@ void loop() {
     float volume;
     detect_note(notef, volume);
     note = (int)(notef);
-    //Serial.print("\n");
     
-    /*if((note>=10) &&(note<117))
-    { 
-      Serial.print(" ");
-      Serial.print(notef);
-      Serial.print(" ");
-      Serial.print(note);
-      Serial.print(" ");
-      Serial.print(volume);
-      Serial.println(" ");
-    }*/
     if(note<10)
     {
       // then it is not a note
@@ -254,45 +278,24 @@ void loop() {
       if(current_note==0)
         current_note=note;
       note_duration+=1;
+      if(note_duration<=4)
+        volume_total+=volume;
     }
     else
     {
       current_note=note;
       note_duration=1;
+      volume_total=0;
     }
 
     if(note_duration==4)
     {
-    sprintf(sbuf, "note=%d volume=%d", note, (int)volume);
+    sprintf(sbuf, "note=%d volume=%d", note, (int)volume_total);
     Serial.println(sbuf);
     chibiTx(BROADCAST_ADDR, (unsigned char*)(&sbuf), strlen(sbuf)+1);
 
       
       cur_sequence[seq_index]=current_note;
-      /*if((abs(cur_sequence[(10+seq_index-4)%10]-23)<=1) &&
-         (abs(cur_sequence[(10+seq_index-3)%10]-25)<=1) &&
-         (abs(cur_sequence[(10+seq_index-2)%10]-28)<=1) &&
-         (abs(cur_sequence[(10+seq_index-1)%10]-23)<=1))
-         {
-           Serial.println("SPELL!");
-           if(pin13_state==LOW)
-             pin13_state=HIGH;
-           else
-             pin13_state=LOW;
-           digitalWrite(13, pin13_state);
-         }
-      if((abs(cur_sequence[(10+seq_index-4)%10]-19)<=1) &&
-         (abs(cur_sequence[(10+seq_index-3)%10]-17)<=1) &&
-         (abs(cur_sequence[(10+seq_index-2)%10]-19)<=1) &&
-         (abs(cur_sequence[(10+seq_index-1)%10]-17)<=1))
-         {
-           Serial.println("SPELL!");
-           if(pin12_state==LOW)
-             pin12_state=HIGH;
-           else
-             pin12_state=LOW;
-           digitalWrite(12, pin12_state);
-         }*/
         for(int j=0;j<10;j++)
         {
           Serial.print(cur_sequence[j]);
