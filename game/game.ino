@@ -43,8 +43,6 @@ int player_max_hp=8;
 
 
 
-
-
 void show_hp(int hp, int maxhp=NUM_LEDS)
 {
     uint32_t green = pixels.Color(0,MAX_LED_VALUE,0);
@@ -64,6 +62,11 @@ void show_hp(int hp, int maxhp=NUM_LEDS)
         pixels.setPixelColor(i, off);
     }
     pixels.show();
+}
+
+void refresh_hp()
+{
+    show_hp(player_hp, player_max_hp);
 }
 
 void led_edit(uint32_t l0, uint32_t l1, uint32_t l2, uint32_t l3, uint32_t l4, uint32_t l5, uint32_t l6, uint32_t l7)
@@ -103,8 +106,9 @@ void setup() {
         spell_name[i] = NULL;
     }
 
-    make_spell(0, "Red Led", "CDEC");
-    make_spell(1, "Green Led", "FGFG");
+    make_spell(0, "Attack", "CDEC");
+    make_spell(1, "Defense", "FGFG");
+    make_spell(2, "Heal", "CECDCEDC");
 
 
     //// Initialize radio
@@ -118,19 +122,21 @@ void setup() {
     // high gain mode
     digitalWrite(hgmPin, HIGH);
 
+
+    refresh_hp();
     Serial.println("setup done");
 
-    show_hp(4,8);
 }
 
 
 
 char sbuf[100];
 typedef struct {
+    int type;       // 0:note, 1:spell
     float pitch;
     float volume;
-    int duration;
-} note_packet_t;
+    int duration;   // note duration / spell index
+} game_packet_t;
 
 int ignore_note=0;
 int ignore_timeout=0;
@@ -174,13 +180,15 @@ void loop() {
             }
             if(blink_counter<0)
             {
+                player_hp--;
                 blink_state=0;
+                refresh_hp();
             }
         }
         if(blink_state==BLINK_WARNING_GREEN)
         {
             blink_counter--;
-            if(blink_counter%10<5)
+            if(blink_counter%7<3)
             {
                 led_edit(COLOR_BLACK, COLOR_GREEN,
                          COLOR_BLACK, COLOR_GREEN,
@@ -202,7 +210,57 @@ void loop() {
     }
     else
     {
-        show_hp(4,8);
+        refresh_hp();
+    }
+
+
+
+    // Radio receive
+    if (chibiDataRcvd() == true)
+    {
+        int rssi, src_addr, len;
+        len = chibiGetData(radio_buf);
+        if (len == 0) {
+            Serial.println("Null packet received");
+            return;
+        }
+
+        // retrieve the data and the signal strength
+        rssi = chibiGetRSSI();
+        src_addr = chibiGetSrcAddr();
+        Serial.print(src_addr);
+        Serial.print("  Signal strength: ");
+        Serial.print(rssi);
+        Serial.print("\t");
+        if (len)
+        {
+            game_packet_t packet;
+            packet = *((game_packet_t*)(radio_buf));
+            if(packet.type==0)
+            {
+                sprintf(sbuf, "Decoded note=%d volume=%d", (int)packet.pitch, (int)packet.volume);
+                ignore_note = packet.pitch;
+                ignore_timeout = 8;
+                ignore_volume = packet.volume/packet.duration;
+                if((cur_sequence[(seq_index-1)%10]==ignore_note)&&
+                   (ignore_volume>cur_sequence_volume[(seq_index-1)%10]))
+                {
+                    cur_sequence_volume[(seq_index-1)%10]=0;
+                    seq_index=(seq_index-1)%10;
+                }
+            }
+            else
+            {
+                sprintf(sbuf, "Received spell=%d", (int)(packet.duration));
+                if(packet.duration==0) // attack spell
+                {
+                    blink_counter = 200;
+                    blink_state = BLINK_WARNING_RED;
+                }
+            }
+            Serial.println(sbuf);
+
+        }
     }
 
 
@@ -241,12 +299,14 @@ void loop() {
         volume_total=0;
     }
 
+
     if((note_duration==4))
     {
         if((ignore_note!=current_note)||(ignore_timeout==0)||(ignore_volume<volume_total/4.0f))
         {
             sprintf(sbuf, "note=%d volume=%d", note, (int)volume_total);
-            note_packet_t packet;
+            game_packet_t packet;
+            packet.type = 0;
             packet.pitch = note;
             packet.volume = volume_total;
             packet.duration = note_duration;
@@ -272,53 +332,32 @@ void loop() {
 
                 if(spell==0)
                 {
-                    blink_counter = 200;
-                    blink_state = BLINK_WARNING_RED;
+                    game_packet_t packet;
+                    packet.type = 1;
+                    packet.duration = spell;
+                    chibiTx(BROADCAST_ADDR, (unsigned char*)(&packet), sizeof(packet));
+
                 }
-                if(spell==1)
+                if(spell==1)  // defense spell
                 {
-                    blink_counter = 200;
-                    blink_state = BLINK_WARNING_GREEN;
+                    if(blink_state==BLINK_WARNING_RED)
+                    {
+                        blink_counter = 100;
+                        blink_state = BLINK_WARNING_GREEN;
+                    }
                 }
+                if(spell==2)
+                {
+                    player_hp = player_max_hp;
+                    refresh_hp();
+                }
+                /*for(int i=0;i<10;i++)
+                {
+                    cur_sequence[i]=0;
+                    cur_sequence_volume[i]=0;
+                }*/
             }
             seq_index=(seq_index+1)%10;
-        }
-    }
-
-    // Radio receive
-    if (chibiDataRcvd() == true)
-    {
-        int rssi, src_addr, len;
-        len = chibiGetData(radio_buf);
-        if (len == 0) {
-            Serial.println("Null packet received");
-            return;
-        }
-
-        // retrieve the data and the signal strength
-        rssi = chibiGetRSSI();
-        src_addr = chibiGetSrcAddr();
-        Serial.print(src_addr);
-        Serial.print("  Signal strength: ");
-        Serial.print(rssi);
-        Serial.print("\t");
-        if (len)
-        {
-            note_packet_t packet;
-            packet = *((note_packet_t*)(radio_buf));
-            Serial.println((char*)(radio_buf));
-            sprintf(sbuf, "Decoded note=%d volume=%d", (int)packet.pitch, (int)packet.volume);
-            Serial.println(sbuf);
-
-            ignore_note = packet.pitch;
-            ignore_timeout = 8;
-            ignore_volume = packet.volume/packet.duration;
-            if((cur_sequence[(seq_index-1)%10]==ignore_note)&&
-               (ignore_volume>cur_sequence_volume[(seq_index-1)%10]))
-            {
-                cur_sequence_volume[(seq_index-1)%10]=0;
-                seq_index=(seq_index-1)%10;
-            }
         }
     }
 }

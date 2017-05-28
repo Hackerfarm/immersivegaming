@@ -1,7 +1,7 @@
 #include "notes.h"
 
 #include <FHT.h>
-int NUM_SPELLS = 2;
+int NUM_SPELLS = 3;
 int *spell_length;
 int **spell_sequence;
 char **spell_name;

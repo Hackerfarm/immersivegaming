@@ -49,10 +49,11 @@ void setup() {
 
 char sbuf[100];
 typedef struct {
+    int type;       // 0:note, 1:spell
     float pitch;
     float volume;
     int duration;
-} note_packet_t;
+} game_packet_t;
 
 
 void loop() {
@@ -71,11 +72,20 @@ void loop() {
         src_addr = chibiGetSrcAddr();
         if (len)
         {
-            note_packet_t packet;
-            packet = *((note_packet_t*)(radio_buf));
-            sprintf(sbuf, "addr=%d \t sstrength=%d \t note=%d \t volume=%d",
-                    (int)(src_addr), (int)rssi, (int)packet.pitch, (int)packet.volume);
-            Serial.println(sbuf);
+            game_packet_t packet;
+            packet = *((game_packet_t*)(radio_buf));
+            if(packet.type==0)
+            {
+                sprintf(sbuf, "note addr=%d \t sstrength=%d \t note=%d \t volume=%d",
+                        (int)(src_addr), (int)rssi, (int)packet.pitch, (int)packet.volume);
+                Serial.println(sbuf);
+            }
+            else
+            {
+                sprintf(sbuf, "spell addr=%d \t sstrength=%d \t spell=%d",
+                        (int)(src_addr), (int)rssi, (int)packet.duration);
+                Serial.println(sbuf);
+            }
 
         }
     }
